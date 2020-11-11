@@ -53,7 +53,9 @@
         float4 velocity = tex2D(_VelTex, i.uv);
 
 				//Simply add velocity to position of each particle
-        pos.xyz += velocity.xyz * _DeltaTime * 2.f;
+        pos.xyz += velocity.xyz * _DeltaTime * 2.0f;
+				//pos.xyz += velocity.xyz * _DeltaTime * 20.0f;
+				//pos.xyz = (pos.xyz + 0.5);
 				
 				//Set position z-axis to 0.0f to simulate particles on a 2d plane.
 				pos.z *= _ThreeDFactor;

@@ -6,6 +6,8 @@ using System.Linq;
 using System.Threading;
 using Random = UnityEngine.Random;
 using System.Threading.Tasks;
+using Unity.Collections;
+using Unity.Jobs;
 
 public class GpuParticles : MonoBehaviour
 {
@@ -38,13 +40,17 @@ public class GpuParticles : MonoBehaviour
   public bool ThreeDMode = true;
   private float m_cameraScaleFactor = 1.0f;
 
-  public Material ParticleMaterial;
+  public RenderTexture RT;
+
+  public Material ParticleMaterial = null;
+
+  private Camera m_camera;
 
   void Start()
   {
     m_velocityMaterial = new Material(Shader.Find("Unlit/ParticlePhysicsVel"));
     m_positionMaterial = new Material(Shader.Find("Unlit/ParticlePhysicsPos"));
-   
+
     m_particleMaterial = ParticleMaterial ?? new Material(Shader.Find("Unlit/Particle"));
 
     m_particleInitPosMat = new Material(Shader.Find("Unlit/ParticleInitialPosition"));
@@ -54,6 +60,8 @@ public class GpuParticles : MonoBehaviour
     QualitySettings.maxQueuedFrames = 3;
     QualitySettings.shadows = ShadowQuality.Disable;
     Application.targetFrameRate = 60;
+
+    m_camera = Camera.main;
 
     Reset(true);
   }
@@ -152,13 +160,27 @@ public class GpuParticles : MonoBehaviour
 
     var numParticlesSqrt = (int)Math.Floor(Math.Sqrt(ParticleCount));
 
-    Parallel.For(0, ParticleCount, i =>
-    {
-      var x = i % numParticlesSqrt;
-      var y = i / numParticlesSqrt;
+    var result = new NativeArray<Vector3>(ParticleCount, Allocator.TempJob);
 
-      vertices[i] = new Vector3(x / (float)numParticlesSqrt, y / (float)numParticlesSqrt, i);
-    });
+    MyParallelJob jobData = new MyParallelJob();
+    jobData.numParticlesSqrt = numParticlesSqrt;
+    jobData.vertices = result;
+
+    //Parallel.For(0, ParticleCount, i =>
+    //{
+    //  var x = i % numParticlesSqrt;
+    //  var y = i / numParticlesSqrt;
+
+    //  vertices[i] = new Vector3(x / (float)numParticlesSqrt, y / (float)numParticlesSqrt, i);
+    //});
+
+    JobHandle handle = jobData.Schedule(result.Length, 1);
+
+    // Wait for the job to complete
+    handle.Complete();
+
+    vertices = result.ToArray();
+    result.Dispose();
 
 
     var numVertexPerMesh = (int)(vertices.Length / (float)meshCount);
@@ -181,15 +203,15 @@ public class GpuParticles : MonoBehaviour
   {
     if (Input.GetAxis("Mouse ScrollWheel") < 0) // back/down
     {
-      int newSize = (int)(Camera.main.orthographicSize + 10000f * Time.deltaTime);
-      newSize = Math.Min(newSize, 20000);
-      Camera.main.orthographicSize = newSize;
+      //int newSize = (int)(Camera.main.orthographicSize + 10000f * Time.deltaTime);
+      //newSize = Math.Min(newSize, 20000);
+      //Camera.main.orthographicSize = newSize;
     }
     if (Input.GetAxis("Mouse ScrollWheel") > 0) // forward/up
     {
-      int newSize = (int)(Camera.main.orthographicSize - 10000f * Time.deltaTime);
-      newSize = Math.Max(newSize, 500);
-      Camera.main.orthographicSize = newSize;
+      //int newSize = (int)(Camera.main.orthographicSize - 10000f * Time.deltaTime);
+      //newSize = Math.Max(newSize, 500);
+      //Camera.main.orthographicSize = newSize;
     }
 
     if (Input.GetKeyDown(KeyCode.Space))
@@ -264,7 +286,7 @@ public class GpuParticles : MonoBehaviour
 
   public Vector3 GetWorldPositionOnPlane(Vector3 screenPosition, float z)
   {
-    Ray ray = Camera.main.ScreenPointToRay(screenPosition);
+    Ray ray = m_camera.ScreenPointToRay(screenPosition);
     Plane xy = new Plane(Vector3.forward, new Vector3(0, 0, z));
     float distance;
     xy.Raycast(ray, out distance);
@@ -274,9 +296,9 @@ public class GpuParticles : MonoBehaviour
   void OnPreRender()
   {
     if(ThreeDMode)
-      m_cameraScaleFactor = Camera.main.fieldOfView * 10.0f / Screen.height;
+      m_cameraScaleFactor = m_camera.fieldOfView * 10.0f / Screen.height;
     else
-      m_cameraScaleFactor = Camera.main.orthographicSize * 00.5f / Screen.height;
+      m_cameraScaleFactor = m_camera.orthographicSize * 00.5f / Screen.height;
 
     //m_velocityMaterial.SetVector("_GravityDirection", new Vector2(0, 1));
     m_velocityMaterial.SetTexture("_PosTex", RT_Position);
@@ -285,6 +307,7 @@ public class GpuParticles : MonoBehaviour
     m_velocityMaterial.SetFloat("_GravityScale", 0);
     m_velocityMaterial.SetFloat("_MouseForce", ThreeDMode ? 150f : 15f);
     m_velocityMaterial.SetFloat("_CameraScaleFactor", m_cameraScaleFactor);
+    m_velocityMaterial.SetPass(0);
 
     var curMouseState = Input.GetMouseButton(0);
 
@@ -297,7 +320,7 @@ public class GpuParticles : MonoBehaviour
     }
     if (!ThreeDMode)
     {
-      var wPos = Camera.main.ScreenToWorldPoint(Input.mousePosition);
+      var wPos = m_camera.ScreenToWorldPoint(Input.mousePosition);
       mousePos = new Vector3(wPos.x / Screen.width, wPos.y / Screen.height, 0);
     }
 
@@ -311,6 +334,7 @@ public class GpuParticles : MonoBehaviour
     m_positionMaterial.SetTexture("_PosTex", RT_Position);
     m_positionMaterial.SetTexture("_VelTex", RT_Velocity);
     m_positionMaterial.SetFloat("_DeltaTime", Time.deltaTime);
+    m_positionMaterial.SetPass(0);
 
     //Calculate and blit the new positions to the Position Render Target
     RT_Position.DiscardContents();
@@ -326,12 +350,23 @@ public class GpuParticles : MonoBehaviour
     m_particleMaterial.SetTexture("_VelTex", RT_Velocity);
     m_particleMaterial.SetPass(0);
 
-    GL.Clear(true, true, Color.black);
+    //m_particleMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
+    //m_particleMaterial.SetInt("_ZWrite", 0);
+    //m_particleMaterial.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+
+    //RenderTexture rt = UnityEngine.RenderTexture.active;
+    //UnityEngine.RenderTexture.active = myRenderTextureToClear;
+    //GL.Clear(true, true, Color.clear);
+    //UnityEngine.RenderTexture.active = rt;
+   // UnityEngine.RenderTexture.active = RT;
+    GL.Clear(true, true, Color.black, 1);
 
     //Draws all the particles to screen
     foreach (var mesh in m_meshes)
     {
       Graphics.DrawMeshNow(mesh, new Vector3(0, 0, 0), Quaternion.identity);
     }
+
+    //UnityEngine.RenderTexture.active = rt;
   }
 }

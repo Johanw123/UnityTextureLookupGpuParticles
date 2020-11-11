@@ -10,7 +10,7 @@
   {
     Tags{ "Queue" = "AlphaTest" "RenderType" = "Transparent" "IgnoreProjector" = "True" }
 
-  Blend One One
+    Blend OneMinusDstColor One
     Cull Off
     ZWrite Off
 
@@ -27,12 +27,14 @@
       {
         float4 vertex : POSITION;
         float2 uv : TEXCOORD0;
+        float4 color : COLOR;
       };
 
       struct v2f
       {
         float4 vertex : SV_POSITION;
         float2 uv : TEXCOORD0;
+        float4 color : COLOR;
       };
 
         sampler2D _PosTex;
@@ -64,8 +66,11 @@
           return o;
         }
 
-        fixed4 frag() : SV_Target
+        fixed4 frag(v2f v) : SV_Target
         {
+          //_Color.a = 1.0f;
+          //return v.color;
+          //return float4(1.0f, 0.0f, 0.0f, 1.0f);
           return _Color;
         }
 
