@@ -340,16 +340,17 @@ public class GpuParticles : MonoBehaviour
     else
       m_cameraScaleFactor = m_camera.orthographicSize * 00.5f / Screen.height;
 
-    //m_velocityMaterial.SetVector("_GravityDirection", new Vector2(0, 1));
+    var mouseForce = (ThreeDMode ? 150f : 15f);
+    if (curMouseStateRight) mouseForce *= -0.3f;
+    else if (!curMouseStateLeft) mouseForce = 0.0f;
+
     m_velocityMaterial.SetTexture("_PosTex", RT_Position);
     m_velocityMaterial.SetTexture("_VelTex", RT_Velocity);
     m_velocityMaterial.SetFloat("_DeltaTime", Time.deltaTime);
     m_velocityMaterial.SetFloat("_GravityScale", 0);
-    m_velocityMaterial.SetFloat("_MouseForce", (ThreeDMode ? 150f : 15f) * (curMouseStateRight ? -0.3f : 1.0f));
+    m_velocityMaterial.SetFloat("_MouseForce", mouseForce);
     m_velocityMaterial.SetFloat("_CameraScaleFactor", m_cameraScaleFactor);
     m_velocityMaterial.SetPass(0);
-
-
 
     var mousePos = Vector3.zero;
 

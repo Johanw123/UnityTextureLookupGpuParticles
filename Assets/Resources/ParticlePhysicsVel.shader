@@ -64,7 +64,7 @@
           float d = distance(0, pullDirection);
 
           //Apply gravity
-          velocity.xy -= _DeltaTime * _GravityScale * float2(_GravityDirection.x, _GravityDirection.y);
+          //velocity.xy -= _DeltaTime * _GravityScale * float2(_GravityDirection.x, _GravityDirection.y);
 
           //Gravity towards center screen
           float d2 = 1 + pow(d, 2.0f);
@@ -72,12 +72,12 @@
           velocity.xyz += gravity_force * pullDirection * _DeltaTime;
 
           //Pull towards mouse if button is down
-          if (_MousePos.x != 0 || _MousePos.y != 0 || _MousePos.z != 0)
+          if (_MouseForce != 0)
           {
-            float3 pullDirection = (_MousePos.xyz - pos.xyz);
+            float2 pullDirection = (_MousePos.xy - pos.xy);
             float d = distance(pos, pullDirection);
             
-            velocity.xyz += pullDirection * (_MouseForce * _CameraScaleFactor / pow(d, 1.5f)) * _DeltaTime;
+            velocity.xy += pullDirection * (_MouseForce * _CameraScaleFactor / pow(d, 1.5f)) * _DeltaTime;
           }
 
           //Limit maximum speed
