@@ -222,15 +222,33 @@ public class GpuParticles : MonoBehaviour
   {
     if (Input.GetAxis("Mouse ScrollWheel") < 0) // back/down
     {
-      //int newSize = (int)(Camera.main.orthographicSize + 10000f * Time.deltaTime);
-      //newSize = Math.Min(newSize, 20000);
-      //Camera.main.orthographicSize = newSize;
+      if (ThreeDMode)
+      {
+        int newSize = (int)(Camera.main.transform.position.z - 2000f * Time.deltaTime);
+        newSize = Math.Max(newSize, -2000);
+        Camera.main.transform.localPosition = new Vector3(0, 0, newSize);
+      }
+      else
+      {
+        int newSize = (int)(Camera.main.orthographicSize + 100000f * Time.deltaTime);
+        newSize = Math.Min(newSize, 100000);
+        Camera.main.orthographicSize = newSize;
+      }
     }
     if (Input.GetAxis("Mouse ScrollWheel") > 0) // forward/up
     {
-      //int newSize = (int)(Camera.main.orthographicSize - 10000f * Time.deltaTime);
-      //newSize = Math.Max(newSize, 500);
-      //Camera.main.orthographicSize = newSize;
+      if (ThreeDMode)
+      {
+        int newSize = (int) (Camera.main.transform.position.z + 2000f * Time.deltaTime);
+        newSize = Math.Min(newSize, -1);
+        Camera.main.transform.localPosition = new Vector3(0, 0, newSize);
+      }
+      else
+      {
+        int newSize = (int)(Camera.main.orthographicSize - 100000f * Time.deltaTime);
+        newSize = Math.Max(newSize, 500);
+        Camera.main.orthographicSize = newSize;
+      }
     }
 
     if (Input.GetKeyDown(KeyCode.Space))
@@ -314,7 +332,10 @@ public class GpuParticles : MonoBehaviour
 
   void OnPreRender()
   {
-    if(ThreeDMode)
+    var curMouseStateLeft = Input.GetMouseButton(0);
+    var curMouseStateRight = Input.GetMouseButton(1);
+
+    if (ThreeDMode)
       m_cameraScaleFactor = m_camera.fieldOfView * 10.0f / Screen.height;
     else
       m_cameraScaleFactor = m_camera.orthographicSize * 00.5f / Screen.height;
@@ -324,11 +345,11 @@ public class GpuParticles : MonoBehaviour
     m_velocityMaterial.SetTexture("_VelTex", RT_Velocity);
     m_velocityMaterial.SetFloat("_DeltaTime", Time.deltaTime);
     m_velocityMaterial.SetFloat("_GravityScale", 0);
-    m_velocityMaterial.SetFloat("_MouseForce", ThreeDMode ? 150f : 15f);
+    m_velocityMaterial.SetFloat("_MouseForce", (ThreeDMode ? 150f : 15f) * (curMouseStateRight ? -0.3f : 1.0f));
     m_velocityMaterial.SetFloat("_CameraScaleFactor", m_cameraScaleFactor);
     m_velocityMaterial.SetPass(0);
 
-    var curMouseState = Input.GetMouseButton(0);
+
 
     var mousePos = Vector3.zero;
 
@@ -343,7 +364,7 @@ public class GpuParticles : MonoBehaviour
       mousePos = new Vector3(wPos.x / Screen.width, wPos.y / Screen.height, 0);
     }
 
-    m_velocityMaterial.SetVector("_MousePos", curMouseState ? mousePos : Vector3.zero);
+    m_velocityMaterial.SetVector("_MousePos", (curMouseStateLeft || curMouseStateRight) ? mousePos : Vector3.zero);
 
     //Calculate and blit the new velocities to the Velocity Render Target
     RT_Velocity.DiscardContents();
