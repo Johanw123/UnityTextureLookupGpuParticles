@@ -49,7 +49,8 @@
 
         float d = distance(float2(0.0f,0.0f), i.pos);
 
-        return float4(pos.y * i.uv.x * velocity.y * 4, pos.x * velocity.x * i.uv.y * 4, 1, 1);
+				return float4(i.pos.x / 100, i.pos.y / 100, 1, 1);
+        //return float4(pos.y * i.uv.x * velocity.y * 4, pos.x * velocity.x * i.uv.y * 4, 1, 1);
       //  return float4(i.vertex.x * 0.0001f - 0.001f, i.vertex.y * 0.0001f - 0.001f, 1, 1);
 			}
 

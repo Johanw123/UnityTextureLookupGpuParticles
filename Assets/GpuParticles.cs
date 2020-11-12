@@ -6,8 +6,12 @@ using System.Linq;
 using System.Threading;
 using Random = UnityEngine.Random;
 using System.Threading.Tasks;
+using Tayx.Graphy;
+using Tayx.Graphy.CustomizationScene;
 using Unity.Collections;
+using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
+using UnityEngine.Rendering;
 
 public class GpuParticles : MonoBehaviour
 {
@@ -33,17 +37,14 @@ public class GpuParticles : MonoBehaviour
   private Texture2D m_InitialPositions;
   private Texture2D m_InitialVelocities;
 
-  private readonly List<Mesh> m_meshes = new List<Mesh>();
+  private Mesh m_particleMesh;
 
   private int m_currentParticles;
 
   public bool ThreeDMode = true;
   private float m_cameraScaleFactor = 1.0f;
 
-  public RenderTexture RT;
-
   public Material ParticleMaterial = null;
-
   private Camera m_camera;
 
   void Start()
@@ -119,16 +120,20 @@ public class GpuParticles : MonoBehaviour
     var colsP = new Color[m_textureWidth * m_textureHeight];
     var colsV = new Color[m_textureWidth * m_textureHeight];
 
-    int count = -1;
+    int count = 0;
 
     for (int y = 0; y < m_textureHeight; y++)
     {
       for (int x = 0; x < m_textureWidth; x++)
       {
-        var r = Random.insideUnitSphere * 5.0f;
-        var r2 = Random.insideUnitCircle * 2.0f;
-        colsP[++count] = new Color(r.x, r.y, /*r.z * 0.01f*/0, 0) * (ThreeDMode ? 6.0f : 1.0f);
-        colsV[count] = new Color(-r2.x, -r2.y, 0, 0) * 12.8f;
+        //var r = Random.insideUnitSphere * 5.0f;
+        //var r2 = Random.insideUnitCircle * 2.0f;
+        //colsP[count] = new Color(r.x, r.y, 0, 0) * (ThreeDMode ? 6.0f : 1.0f);
+        //colsV[count] = new Color(-r2.x, -r2.y, 0, 0) * 12.8f;
+
+        colsP[count] = new Color(x / 100f, y / 100f, 0, 0);
+        //colsV[count] = new Color(x, y, 0, 0);
+        ++count;
       }
     }
 
@@ -140,31 +145,12 @@ public class GpuParticles : MonoBehaviour
     m_positionMaterial.SetFloat("_ThreeDFactor", ThreeDMode ? 1.0f : 0.0f);
   }
 
-  void SetupMesh()
+  void SetupMesh2()
   {
-    var vertices = new Vector3[ParticleCount];
-
-    foreach (var m in m_meshes)
-    {
-      m.Clear(false);
-    }
-
-    m_meshes.Clear();
-
-    var meshCount = (int)Math.Ceiling(ParticleCount / 65000d);
-
-    for (int i = 0; i < meshCount; i++)
-    {
-      m_meshes.Add(new Mesh());
-    }
+    m_particleMesh?.Clear(false);
+    m_particleMesh = new Mesh { indexFormat = IndexFormat.UInt32 };
 
     var numParticlesSqrt = (int)Math.Floor(Math.Sqrt(ParticleCount));
-
-    var result = new NativeArray<Vector3>(ParticleCount, Allocator.TempJob);
-
-    MyParallelJob jobData = new MyParallelJob();
-    jobData.numParticlesSqrt = numParticlesSqrt;
-    jobData.vertices = result;
 
     //Parallel.For(0, ParticleCount, i =>
     //{
@@ -174,28 +160,61 @@ public class GpuParticles : MonoBehaviour
     //  vertices[i] = new Vector3(x / (float)numParticlesSqrt, y / (float)numParticlesSqrt, i);
     //});
 
-    JobHandle handle = jobData.Schedule(result.Length, 1);
+    //var indices = new int[ParticleCount];
 
-    // Wait for the job to complete
-    handle.Complete();
+    //for (int i = 0; i < ParticleCount; i++)
+    //  indices[i] = i;
 
-    vertices = result.ToArray();
+    var indices = GetIndicies(ParticleCount);
+    var vertices = GetVertices(ParticleCount, numParticlesSqrt);
+
+    m_particleMesh.vertices = vertices;
+    m_particleMesh.SetIndices(indices, MeshTopology.Points, 0, false);
+  }
+  private int[] GetIndicies(int size)
+  {
+    var indiciesResult = new NativeArray<int>(size, Allocator.TempJob);
+    var indicesJob = new GenerateIndices { Indices = indiciesResult };
+    var indiciesJobHandle = indicesJob.Schedule(size, 0);
+    indiciesJobHandle.Complete();
+    indiciesResult = indicesJob.Indices;
+
+    var indices = new int[size];
+    SetNativeVertexArray(indices, indiciesResult);
+
+    indiciesResult.Dispose();
+
+    return indices;
+  }
+
+  private Vector3[] GetVertices(int size, int numParticlesSqrt)
+  {
+    var result = new NativeArray<Vector3>(size, Allocator.TempJob);
+    var job = new GenerateVertices
+    {
+      NumParticlesSqrt = numParticlesSqrt,
+      Vertices = result
+    };
+    var indiciesJobHandle = job.Schedule(size, 0);
+    indiciesJobHandle.Complete();
+    result = job.Vertices;
+
+    var vertices = new Vector3[size];
+    SetNativeVertexArray(vertices, result);
+
     result.Dispose();
 
+    return vertices;
+  }
 
-    var numVertexPerMesh = (int)(vertices.Length / (float)meshCount);
-
-    var indices = new int[numVertexPerMesh];
-
-    for (int i = 0; i < numVertexPerMesh; i++)
-      indices[i] = i;
-
-    var vertexChunks = vertices.AsChunks(vertices.Length / meshCount).ToArray();
-
-    for (int i = 0; i < meshCount; i++)
+  unsafe void SetNativeVertexArray<T>(T[] vertexArray, NativeArray<T> vertexBuffer) where T : unmanaged
+  {
+    // pin the target vertex array and get a pointer to it
+    fixed (void* vertexArrayPointer = vertexArray)
     {
-      m_meshes[i].vertices = vertexChunks[i];
-      m_meshes[i].SetIndices(indices, MeshTopology.Points, 0, false);
+      // memcopy the native array over the top
+      UnsafeUtility.MemCpy(vertexArrayPointer, NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(vertexBuffer),
+        vertexArray.Length * (long)UnsafeUtility.SizeOf<T>());
     }
   }
 
@@ -242,17 +261,17 @@ public class GpuParticles : MonoBehaviour
     }
     if (Input.GetKeyDown(KeyCode.Alpha4))
     {
-      ParticleCount = 4000000;
+      ParticleCount = 10000000;
       Reset(true);
     }
     if (Input.GetKeyDown(KeyCode.Alpha5))
     {
-      ParticleCount = 5000000;
+      ParticleCount = 20000000;
       Reset(true);
     }
     if (Input.GetKeyDown(KeyCode.Alpha6))
     {
-      ParticleCount = 6000000;
+      ParticleCount = 30000000;
       Reset(true);
     }
   }
@@ -263,7 +282,7 @@ public class GpuParticles : MonoBehaviour
     if(ParticleCount != m_currentParticles)
     {
       SetupTextures();
-      SetupMesh();
+      SetupMesh2();
       SetupParticles();
     }
 
@@ -350,23 +369,9 @@ public class GpuParticles : MonoBehaviour
     m_particleMaterial.SetTexture("_VelTex", RT_Velocity);
     m_particleMaterial.SetPass(0);
 
-    //m_particleMaterial.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Off);
-    //m_particleMaterial.SetInt("_ZWrite", 0);
-    //m_particleMaterial.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
-
-    //RenderTexture rt = UnityEngine.RenderTexture.active;
-    //UnityEngine.RenderTexture.active = myRenderTextureToClear;
-    //GL.Clear(true, true, Color.clear);
-    //UnityEngine.RenderTexture.active = rt;
-   // UnityEngine.RenderTexture.active = RT;
     GL.Clear(true, true, Color.black, 1);
 
-    //Draws all the particles to screen
-    foreach (var mesh in m_meshes)
-    {
-      Graphics.DrawMeshNow(mesh, new Vector3(0, 0, 0), Quaternion.identity);
-    }
-
-    //UnityEngine.RenderTexture.active = rt;
+    //Draws all the particles to screen/render target
+    Graphics.DrawMeshNow(m_particleMesh, new Vector3(0, 0, 0), Quaternion.identity);
   }
 }
