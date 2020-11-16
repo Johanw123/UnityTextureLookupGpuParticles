@@ -3,6 +3,7 @@ using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection.Emit;
 using System.Threading;
 using Random = UnityEngine.Random;
 using System.Threading.Tasks;
@@ -44,8 +45,14 @@ public class GpuParticles : MonoBehaviour
   public bool ThreeDMode = true;
   private float m_cameraScaleFactor = 1.0f;
 
+  public float CenterGravityForce = 3000f;
+  public float MouseForcePull = 150.0f;
+  public float MouseForcePush = 45.0f;
+
   public Material ParticleMaterial = null;
   private Camera m_camera;
+
+  private InputHelper m_input = new InputHelper();
 
   void Start()
   {
@@ -62,9 +69,14 @@ public class GpuParticles : MonoBehaviour
     QualitySettings.shadows = ShadowQuality.Disable;
     Application.targetFrameRate = 60;
 
-    m_camera = Camera.main;
+    m_camera = GetComponent<Camera>();
 
     Reset(true);
+  }
+
+  void Update()
+  {
+    m_input.UpdateInput(ThreeDMode, ref ParticleCount, Reset);
   }
 
   void SetupTextures()
@@ -100,6 +112,8 @@ public class GpuParticles : MonoBehaviour
 
   private void SetupRT(ref RenderTexture RT)
   {
+    RT?.DiscardContents(true, true);
+
     RT = new RenderTexture(m_textureWidth, m_textureHeight, 0, RenderTextureFormat.ARGBFloat,
       RenderTextureReadWrite.Default)
     {
@@ -126,13 +140,11 @@ public class GpuParticles : MonoBehaviour
     {
       for (int x = 0; x < m_textureWidth; x++)
       {
-        //var r = Random.insideUnitSphere * 5.0f;
-        //var r2 = Random.insideUnitCircle * 2.0f;
-        //colsP[count] = new Color(r.x, r.y, 0, 0) * (ThreeDMode ? 6.0f : 1.0f);
-        //colsV[count] = new Color(-r2.x, -r2.y, 0, 0) * 12.8f;
+        var r = Random.insideUnitSphere * 5.0f;
 
-        colsP[count] = new Color(x / 100f, y / 100f, 0, 0);
-        //colsV[count] = new Color(x, y, 0, 0);
+        colsP[count] = new Color(r.x, r.y, 0, 0) * (ThreeDMode ? 6.0f : 1.0f);
+        colsV[count] = new Color(r.x, r.y, 0, 0) * 112.8f;
+
         ++count;
       }
     }
@@ -145,31 +157,19 @@ public class GpuParticles : MonoBehaviour
     m_positionMaterial.SetFloat("_ThreeDFactor", ThreeDMode ? 1.0f : 0.0f);
   }
 
-  void SetupMesh2()
+  void SetupMesh()
   {
     m_particleMesh?.Clear(false);
     m_particleMesh = new Mesh { indexFormat = IndexFormat.UInt32 };
 
     var numParticlesSqrt = (int)Math.Floor(Math.Sqrt(ParticleCount));
 
-    //Parallel.For(0, ParticleCount, i =>
-    //{
-    //  var x = i % numParticlesSqrt;
-    //  var y = i / numParticlesSqrt;
-
-    //  vertices[i] = new Vector3(x / (float)numParticlesSqrt, y / (float)numParticlesSqrt, i);
-    //});
-
-    //var indices = new int[ParticleCount];
-
-    //for (int i = 0; i < ParticleCount; i++)
-    //  indices[i] = i;
-
     var indices = GetIndicies(ParticleCount);
     var vertices = GetVertices(ParticleCount, numParticlesSqrt);
 
     m_particleMesh.vertices = vertices;
     m_particleMesh.SetIndices(indices, MeshTopology.Points, 0, false);
+    m_particleMesh.Optimize();
   }
   private int[] GetIndicies(int size)
   {
@@ -218,94 +218,18 @@ public class GpuParticles : MonoBehaviour
     }
   }
 
-  void Update()
-  {
-    if (Input.GetAxis("Mouse ScrollWheel") < 0) // back/down
-    {
-      if (ThreeDMode)
-      {
-        int newSize = (int)(Camera.main.transform.position.z - 2000f * Time.deltaTime);
-        newSize = Math.Max(newSize, -2000);
-        Camera.main.transform.localPosition = new Vector3(0, 0, newSize);
-      }
-      else
-      {
-        int newSize = (int)(Camera.main.orthographicSize + 100000f * Time.deltaTime);
-        newSize = Math.Min(newSize, 100000);
-        Camera.main.orthographicSize = newSize;
-      }
-    }
-    if (Input.GetAxis("Mouse ScrollWheel") > 0) // forward/up
-    {
-      if (ThreeDMode)
-      {
-        int newSize = (int) (Camera.main.transform.position.z + 2000f * Time.deltaTime);
-        newSize = Math.Min(newSize, -1);
-        Camera.main.transform.localPosition = new Vector3(0, 0, newSize);
-      }
-      else
-      {
-        int newSize = (int)(Camera.main.orthographicSize - 100000f * Time.deltaTime);
-        newSize = Math.Max(newSize, 500);
-        Camera.main.orthographicSize = newSize;
-      }
-    }
-
-    if (Input.GetKeyDown(KeyCode.Space))
-    {
-      Time.timeScale = Time.timeScale <= 0 ? 1.0f : 0.0f;
-    }
-
-    if (Input.GetKeyDown(KeyCode.R))
-      Reset(true);
-    if (Input.GetKeyDown(KeyCode.T))
-      Reset(false);
-
-
-    if (Input.GetKeyDown(KeyCode.Alpha1))
-    {
-      ParticleCount = 1000000;
-      Reset(true);
-    }
-    if (Input.GetKeyDown(KeyCode.Alpha2))
-    {
-      ParticleCount = 2000000;
-      Reset(true);
-    }
-    if (Input.GetKeyDown(KeyCode.Alpha3))
-    {
-      ParticleCount = 3000000;
-      Reset(true);
-    }
-    if (Input.GetKeyDown(KeyCode.Alpha4))
-    {
-      ParticleCount = 10000000;
-      Reset(true);
-    }
-    if (Input.GetKeyDown(KeyCode.Alpha5))
-    {
-      ParticleCount = 20000000;
-      Reset(true);
-    }
-    if (Input.GetKeyDown(KeyCode.Alpha6))
-    {
-      ParticleCount = 30000000;
-      Reset(true);
-    }
-  }
-
   public void Reset(bool positionsFromTexture)
   {
+    RT_Position?.DiscardContents(true, true);
+    RT_Velocity?.DiscardContents(true, true);
+
     //We recalculate render targets and meshes if particle count has changed
-    if(ParticleCount != m_currentParticles)
+    if (ParticleCount != m_currentParticles)
     {
       SetupTextures();
-      SetupMesh2();
+      SetupMesh();
       SetupParticles();
     }
-
-    RT_Position.DiscardContents();
-    RT_Velocity.DiscardContents();
 
     if (positionsFromTexture) //We can either Blit the original initial positions we created before
     {
@@ -338,10 +262,10 @@ public class GpuParticles : MonoBehaviour
     if (ThreeDMode)
       m_cameraScaleFactor = m_camera.fieldOfView * 10.0f / Screen.height;
     else
-      m_cameraScaleFactor = m_camera.orthographicSize * 00.5f / Screen.height;
+      m_cameraScaleFactor = m_camera.orthographicSize * 0.5f / Screen.height;
 
-    var mouseForce = (ThreeDMode ? 150f : 15f);
-    if (curMouseStateRight) mouseForce *= -0.3f;
+    var mouseForce = MouseForcePull;/*(ThreeDMode ? 150f : 15f)*/;
+    if (curMouseStateRight) mouseForce = -MouseForcePush;
     else if (!curMouseStateLeft) mouseForce = 0.0f;
 
     m_velocityMaterial.SetTexture("_PosTex", RT_Position);
@@ -349,7 +273,9 @@ public class GpuParticles : MonoBehaviour
     m_velocityMaterial.SetFloat("_DeltaTime", Time.deltaTime);
     m_velocityMaterial.SetFloat("_GravityScale", 0);
     m_velocityMaterial.SetFloat("_MouseForce", mouseForce);
+    m_velocityMaterial.SetFloat("_CenterGravityForce", CenterGravityForce);
     m_velocityMaterial.SetFloat("_CameraScaleFactor", m_cameraScaleFactor);
+
     m_velocityMaterial.SetPass(0);
 
     var mousePos = Vector3.zero;
@@ -395,5 +321,8 @@ public class GpuParticles : MonoBehaviour
 
     //Draws all the particles to screen/render target
     Graphics.DrawMeshNow(m_particleMesh, new Vector3(0, 0, 0), Quaternion.identity);
+
+    m_particleMaterial.SetPass(1);
+    Graphics.Blit(null, null, m_particleMaterial);
   }
 }

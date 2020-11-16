@@ -74,7 +74,29 @@
           return _Color;
         }
 
-        ENDCG
+          ENDCG
       }
+
+      // Render scaled background geometry
+      CGPROGRAM
+        #pragma surface surf Standard vertex:vert
+
+        float4 _OutlineColor;
+        float _OutlineSize;
+
+        // Linearly expand using surface normal
+        void vert(inout appdata_full v) {
+          v.vertex.xyz += 123;
+        }
+
+        struct Input {
+          float2 uv_MainTex;
+        };
+
+        void surf(Input IN, inout SurfaceOutputStandard o) {
+          o.Albedo = _OutlineColor.rgb;
+        }
+      ENDCG
+
   }
 }

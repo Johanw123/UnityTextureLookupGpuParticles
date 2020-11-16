@@ -45,6 +45,9 @@
          float _DeltaTime;
          float _MouseForce;
 
+
+         float _CenterGravityForce;
+
          v2f vert(appdata v)
          {
            v2f o;
@@ -68,7 +71,7 @@
 
           //Gravity towards center screen
           float d2 = 1 + pow(d, 2.0f);
-          float gravity_force = 6.67f * pow(10, -2) * 1000 * 1 / d2;
+          float gravity_force = 6.67f * pow(10, -2) * _CenterGravityForce / d2;
           velocity.xyz += gravity_force * pullDirection * _DeltaTime;
 
           //Pull towards mouse if button is down
