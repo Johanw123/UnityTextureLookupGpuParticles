@@ -86,9 +86,7 @@
           //Limit maximum speed
           velocity.x = clamp(velocity.x, -10.0f, 10.0f);
           velocity.y = clamp(velocity.y, -10.0f, 10.0f);
-          velocity.z = clamp(velocity.z, -10.0f, 10.0f);
-
-          velocity.w = 1.0f;
+          //velocity.z = clamp(velocity.z, -10.0f, 10.0f);
 
           return velocity;
          }

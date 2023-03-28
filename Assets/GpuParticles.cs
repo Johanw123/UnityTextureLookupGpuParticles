@@ -1,18 +1,13 @@
 ﻿using System;
-using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection.Emit;
-using System.Threading;
-using Random = UnityEngine.Random;
 using System.Threading.Tasks;
-using Tayx.Graphy;
-using Tayx.Graphy.CustomizationScene;
+using UnityEngine;
 using Unity.Collections;
 using Unity.Collections.LowLevel.Unsafe;
 using Unity.Jobs;
 using UnityEngine.Rendering;
+
 
 public class GpuParticles : MonoBehaviour
 {
@@ -35,8 +30,8 @@ public class GpuParticles : MonoBehaviour
   private Material m_particleInitPosMat;
   private Material m_particleInitVelMat;
 
-  private Texture2D m_InitialPositions;
-  private Texture2D m_InitialVelocities;
+  private Texture2D m_initialPositions;
+  private Texture2D m_initialVelocities;
 
   private Mesh m_particleMesh;
 
@@ -52,7 +47,8 @@ public class GpuParticles : MonoBehaviour
   public Material ParticleMaterial = null;
   private Camera m_camera;
 
-  private InputHelper m_input = new InputHelper();
+  public TextureFormat CurrentTextureFormat = TextureFormat.RGBAFloat;
+  private InputHelper m_input;
 
   void Start()
   {
@@ -64,19 +60,21 @@ public class GpuParticles : MonoBehaviour
     m_particleInitPosMat = new Material(Shader.Find("Unlit/ParticleInitialPosition"));
     m_particleInitVelMat = new Material(Shader.Find("Unlit/ParticleInitialVelocity"));
 
+    m_input = GetComponent<InputHelper>();
+
     QualitySettings.vSyncCount = 1;
     QualitySettings.maxQueuedFrames = 3;
     QualitySettings.shadows = ShadowQuality.Disable;
-    Application.targetFrameRate = 60;
 
     m_camera = GetComponent<Camera>();
 
-    Reset(true);
+    Reset(false);
   }
 
   void Update()
   {
-    m_input.UpdateInput(ThreeDMode, ref ParticleCount, Reset);
+    if(m_input != null)
+      m_input.UpdateInput(ThreeDMode, ref ParticleCount, b => Reset(false));
   }
 
   void SetupTextures()
@@ -98,6 +96,8 @@ public class GpuParticles : MonoBehaviour
       }
     }
 
+    Debug.Log($"Using texture: {m_textureWidth}x{m_textureHeight}");
+
     if (RT_Position != null)
     {
       RT_Position.DiscardContents();
@@ -110,114 +110,88 @@ public class GpuParticles : MonoBehaviour
     SetupRT(ref RT_Empty);
   }
 
-  private void SetupRT(ref RenderTexture RT)
+  private void SetupRT(ref RenderTexture renderTexture)
   {
-    RT?.DiscardContents(true, true);
+    renderTexture?.DiscardContents(true, true);
 
-    RT = new RenderTexture(m_textureWidth, m_textureHeight, 0, RenderTextureFormat.ARGBFloat,
+    renderTexture = new RenderTexture(m_textureWidth, m_textureHeight, 0, RenderTextureFormat.ARGBFloat,
       RenderTextureReadWrite.Default)
     {
       useMipMap = false,
       isPowerOfTwo = true,
       filterMode = FilterMode.Point,
     };
-    RT.Create();
+    renderTexture.Create();
   }
 
   void SetupParticles()
   {
-    m_InitialPositions = new Texture2D(m_textureWidth, m_textureHeight, TextureFormat.RGBAFloat, false, false);
-    m_InitialVelocities = new Texture2D(m_textureWidth, m_textureHeight, TextureFormat.RGBAFloat, false, false);
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+
+    m_initialPositions = new Texture2D(m_textureWidth, m_textureHeight, CurrentTextureFormat, false, false);
+    m_initialVelocities = new Texture2D(m_textureWidth, m_textureHeight, CurrentTextureFormat, false, false);
 
     m_currentParticles = ParticleCount;
 
-    var colsP = new Color[m_textureWidth * m_textureHeight];
-    var colsV = new Color[m_textureWidth * m_textureHeight];
-
-    int count = 0;
-
-    for (int y = 0; y < m_textureHeight; y++)
+    int TextureSize = m_textureWidth * m_textureHeight;
+    
+    var colorsP = m_initialPositions.GetRawTextureData<Color>();
+    var colorsV = m_initialVelocities.GetRawTextureData<Color>();
+    
+    var job = new GenerateTextureData
     {
-      for (int x = 0; x < m_textureWidth; x++)
-      {
-        var r = Random.insideUnitSphere * 5.0f;
+      NumParticles = ParticleCount,
+      Positions = colorsP,
+      Velocities = colorsV,
+      Factor = (ThreeDMode ? 6.0f : 1.0f)
+    };
+    
+    var indiciesJobHandle = job.Schedule(ParticleCount, 0);
+    indiciesJobHandle.Complete();
 
-        colsP[count] = new Color(r.x, r.y, 0, 0) * (ThreeDMode ? 6.0f : 1.0f);
-        colsV[count] = new Color(r.x, r.y, 0, 0) * 112.8f;
-
-        ++count;
-      }
-    }
-
-    m_InitialPositions.SetPixels(colsP);
-    m_InitialVelocities.SetPixels(colsV);
-    m_InitialPositions.Apply(false, false);
-    m_InitialVelocities.Apply(false, false);
+    m_initialPositions.Apply(false, false);
+    m_initialVelocities.Apply(false, false);
 
     m_positionMaterial.SetFloat("_ThreeDFactor", ThreeDMode ? 1.0f : 0.0f);
+
+    watch.Stop();
+    var elapsedMs = watch.ElapsedMilliseconds;
+    
+    Debug.Log("SetupParticles: " + elapsedMs + " ms");
   }
 
   void SetupMesh()
   {
+    var watch = System.Diagnostics.Stopwatch.StartNew();
+    
     m_particleMesh?.Clear(false);
     m_particleMesh = new Mesh { indexFormat = IndexFormat.UInt32 };
 
     var numParticlesSqrt = (int)Math.Floor(Math.Sqrt(ParticleCount));
-
-    var indices = GetIndicies(ParticleCount);
-    var vertices = GetVertices(ParticleCount, numParticlesSqrt);
-
-    m_particleMesh.vertices = vertices;
-    m_particleMesh.SetIndices(indices, MeshTopology.Points, 0, false);
-    m_particleMesh.Optimize();
-  }
-  private int[] GetIndicies(int size)
-  {
-    var indiciesResult = new NativeArray<int>(size, Allocator.TempJob);
-    var indicesJob = new GenerateIndices { Indices = indiciesResult };
-    var indiciesJobHandle = indicesJob.Schedule(size, 0);
-    indiciesJobHandle.Complete();
-    indiciesResult = indicesJob.Indices;
-
-    var indices = new int[size];
-    SetNativeVertexArray(indices, indiciesResult);
-
-    indiciesResult.Dispose();
-
-    return indices;
-  }
-
-  private Vector3[] GetVertices(int size, int numParticlesSqrt)
-  {
-    var result = new NativeArray<Vector3>(size, Allocator.TempJob);
-    var job = new GenerateVertices
+    
+    var indices = new NativeArray<int>(ParticleCount, Allocator.TempJob);
+    var vertices = new NativeArray<Vector3>(ParticleCount, Allocator.TempJob);
+    
+    var job = new GenerateMeshData
     {
       NumParticlesSqrt = numParticlesSqrt,
-      Vertices = result
+      Vertices = vertices,
+      Indices = indices
     };
-    var indiciesJobHandle = job.Schedule(size, 0);
-    indiciesJobHandle.Complete();
-    result = job.Vertices;
+    
+    var jobHandle = job.Schedule(ParticleCount, 0);
+    jobHandle.Complete();
 
-    var vertices = new Vector3[size];
-    SetNativeVertexArray(vertices, result);
+    m_particleMesh.SetVertices(vertices);
+    m_particleMesh.SetIndices(indices, MeshTopology.Points, 0, false);
 
-    result.Dispose();
-
-    return vertices;
+    watch.Stop();
+    var elapsedMs = watch.ElapsedMilliseconds;
+    
+    Debug.Log("SetupMesh: " + elapsedMs + " ms");
   }
 
-  unsafe void SetNativeVertexArray<T>(T[] vertexArray, NativeArray<T> vertexBuffer) where T : unmanaged
-  {
-    // pin the target vertex array and get a pointer to it
-    fixed (void* vertexArrayPointer = vertexArray)
-    {
-      // memcopy the native array over the top
-      UnsafeUtility.MemCpy(vertexArrayPointer, NativeArrayUnsafeUtility.GetUnsafeBufferPointerWithoutChecks(vertexBuffer),
-        vertexArray.Length * (long)UnsafeUtility.SizeOf<T>());
-    }
-  }
-
+  
   public void Reset(bool positionsFromTexture)
   {
     RT_Position?.DiscardContents(true, true);
@@ -230,13 +204,11 @@ public class GpuParticles : MonoBehaviour
       SetupMesh();
       SetupParticles();
     }
-
+    
     if (positionsFromTexture) //We can either Blit the original initial positions we created before
     {
-      Graphics.Blit(m_InitialPositions, RT_Position);
-      Graphics.Blit(m_InitialVelocities, RT_Velocity);
-      //Blit Empty RT for no initial velocity
-      //Graphics.Blit(RT_Empty, RT_Velocity);
+      Graphics.Blit(m_initialPositions, RT_Position);
+      Graphics.Blit(m_initialVelocities, RT_Velocity);
     }
     else //Or we can let a shader reset/set the new positions/velocities
     {
@@ -249,8 +221,7 @@ public class GpuParticles : MonoBehaviour
   {
     Ray ray = m_camera.ScreenPointToRay(screenPosition);
     Plane xy = new Plane(Vector3.forward, new Vector3(0, 0, z));
-    float distance;
-    xy.Raycast(ray, out distance);
+    xy.Raycast(ray, out var distance);
     return ray.GetPoint(distance);
   }
 
@@ -300,7 +271,7 @@ public class GpuParticles : MonoBehaviour
     //Feed velocities and previous frame position to the Position-shader
     m_positionMaterial.SetTexture("_PosTex", RT_Position);
     m_positionMaterial.SetTexture("_VelTex", RT_Velocity);
-    m_positionMaterial.SetFloat("_DeltaTime", Time.deltaTime);
+    m_positionMaterial.SetFloat("_DeltaTime", Time.deltaTime * 2.0f);
     m_positionMaterial.SetPass(0);
 
     //Calculate and blit the new positions to the Position Render Target
@@ -322,7 +293,11 @@ public class GpuParticles : MonoBehaviour
     //Draws all the particles to screen/render target
     Graphics.DrawMeshNow(m_particleMesh, new Vector3(0, 0, 0), Quaternion.identity);
 
-    m_particleMaterial.SetPass(1);
     Graphics.Blit(null, null, m_particleMaterial);
+  }
+
+  void OnGUI()
+  {
+    GUI.Label(new Rect(30, 100, 400, 200), "Num Particles: \n" + ParticleCount);
   }
 }

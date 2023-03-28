@@ -78,7 +78,7 @@
       }
 
       // Render scaled background geometry
-      CGPROGRAM
+     /* CGPROGRAM
         #pragma surface surf Standard vertex:vert
 
         float4 _OutlineColor;
@@ -96,7 +96,7 @@
         void surf(Input IN, inout SurfaceOutputStandard o) {
           o.Albedo = _OutlineColor.rgb;
         }
-      ENDCG
+      ENDCG*/
 
   }
 }
