@@ -67,7 +67,26 @@ public class GpuParticles : MonoBehaviour
     QualitySettings.shadows = ShadowQuality.Disable;
 
     m_camera = GetComponent<Camera>();
-
+    
+    if(ThreeDMode)
+    {
+      m_positionMaterial.EnableKeyword("THREE_D_MODE_ON");
+      m_velocityMaterial.EnableKeyword("THREE_D_MODE_ON");
+      m_particleInitVelMat.EnableKeyword("THREE_D_MODE_ON");
+      m_particleInitPosMat.EnableKeyword("THREE_D_MODE_ON");
+      m_particleMaterial.EnableKeyword("THREE_D_MODE_ON");
+      Shader.EnableKeyword("THREE_D_MODE_ON");
+    }
+    else
+    {
+      m_positionMaterial.DisableKeyword("THREE_D_MODE_ON");
+      m_velocityMaterial.DisableKeyword("THREE_D_MODE_ON");
+      m_particleInitVelMat.DisableKeyword("THREE_D_MODE_ON");
+      m_particleInitPosMat.DisableKeyword("THREE_D_MODE_ON");
+      m_particleMaterial.DisableKeyword("THREE_D_MODE_ON");
+      Shader.DisableKeyword("THREE_D_MODE_ON");
+    }
+    
     Reset(false);
   }
 
@@ -95,8 +114,6 @@ public class GpuParticles : MonoBehaviour
         break;
       }
     }
-
-    Debug.Log($"Using texture: {m_textureWidth}x{m_textureHeight}");
 
     if (RT_Position != null)
     {
@@ -126,14 +143,12 @@ public class GpuParticles : MonoBehaviour
 
   void SetupParticles()
   {
-    var watch = System.Diagnostics.Stopwatch.StartNew();
-
     m_initialPositions = new Texture2D(m_textureWidth, m_textureHeight, CurrentTextureFormat, false, false);
     m_initialVelocities = new Texture2D(m_textureWidth, m_textureHeight, CurrentTextureFormat, false, false);
 
     m_currentParticles = ParticleCount;
 
-    int TextureSize = m_textureWidth * m_textureHeight;
+    int textureSize = m_textureWidth * m_textureHeight;
     
     var colorsP = m_initialPositions.GetRawTextureData<Color>();
     var colorsV = m_initialVelocities.GetRawTextureData<Color>();
@@ -153,17 +168,10 @@ public class GpuParticles : MonoBehaviour
     m_initialVelocities.Apply(false, false);
 
     m_positionMaterial.SetFloat("_ThreeDFactor", ThreeDMode ? 1.0f : 0.0f);
-
-    watch.Stop();
-    var elapsedMs = watch.ElapsedMilliseconds;
-    
-    Debug.Log("SetupParticles: " + elapsedMs + " ms");
   }
 
   void SetupMesh()
   {
-    var watch = System.Diagnostics.Stopwatch.StartNew();
-    
     m_particleMesh?.Clear(false);
     m_particleMesh = new Mesh { indexFormat = IndexFormat.UInt32 };
 
@@ -184,11 +192,6 @@ public class GpuParticles : MonoBehaviour
 
     m_particleMesh.SetVertices(vertices);
     m_particleMesh.SetIndices(indices, MeshTopology.Points, 0, false);
-
-    watch.Stop();
-    var elapsedMs = watch.ElapsedMilliseconds;
-    
-    Debug.Log("SetupMesh: " + elapsedMs + " ms");
   }
 
   
@@ -202,7 +205,9 @@ public class GpuParticles : MonoBehaviour
     {
       SetupTextures();
       SetupMesh();
-      SetupParticles();
+      
+      if(positionsFromTexture)
+        SetupParticles();
     }
     
     if (positionsFromTexture) //We can either Blit the original initial positions we created before

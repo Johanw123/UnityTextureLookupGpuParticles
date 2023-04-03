@@ -20,7 +20,8 @@
       #pragma vertex vert
       #pragma fragment frag
       #pragma target 3.0
-
+      #pragma shader_feature THREE_D_MODE_ON
+      
       #include "UnityCG.cginc"
 
       struct appdata
@@ -49,15 +50,19 @@
         v2f vert(appdata v)
         {
           v2f o;
-
-          float4 realPosition = tex2Dlod(_PosTex, float4(v.vertex.xyz, 0));
-          float4 realVelocity = tex2Dlod(_VelTex, float4(v.vertex.xyz, 0));
+#if defined(THREE_D_MODE_ON)
+          float4 realPosition = tex2Dlod(_PosTex, float4(0, 0, 0, 0));
+#else
+          float4 realPosition = tex2Dlod(_PosTex, float4(v.vertex.xy, 0, 0));
+#endif
 
           realPosition.x = realPosition.x * _ScreenWidth;
           realPosition.y = realPosition.y * _ScreenHeight;
+          
+#if defined(THREE_D_MODE_ON)
           realPosition.z = realPosition.z * _ScreenHeight;
-
-          //realPosition.z = 1.0f;
+#endif
+          
           realPosition.w = 1.0f;
 
           o.uv = TRANSFORM_TEX(v.uv, _VelTex);
@@ -68,35 +73,10 @@
 
         fixed4 frag(v2f v) : SV_Target
         {
-          //_Color.a = 1.0f;
-          //return v.color;
-          //return float4(1.0f, 0.0f, 0.0f, 1.0f);
           return _Color;
         }
 
           ENDCG
       }
-
-      // Render scaled background geometry
-     /* CGPROGRAM
-        #pragma surface surf Standard vertex:vert
-
-        float4 _OutlineColor;
-        float _OutlineSize;
-
-        // Linearly expand using surface normal
-        void vert(inout appdata_full v) {
-          v.vertex.xyz += 123;
-        }
-
-        struct Input {
-          float2 uv_MainTex;
-        };
-
-        void surf(Input IN, inout SurfaceOutputStandard o) {
-          o.Albedo = _OutlineColor.rgb;
-        }
-      ENDCG*/
-
   }
 }

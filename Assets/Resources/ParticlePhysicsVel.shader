@@ -18,8 +18,10 @@
         #pragma vertex vert
         #pragma fragment frag
         #pragma target 3.0
+        #pragma shader_feature THREE_D_MODE_ON
+        
         #include "UnityCG.cginc"
-
+        
          struct appdata
          {
            float4 vertex : POSITION;
@@ -62,9 +64,15 @@
           float4 velocity = tex2D(_VelTex, i.uv);
           float4 pos = tex2D(_PosTex, i.uv);
 
+#if defined(THREE_D_MODE_ON)
           float3 pullLocation = float3(0, 0, 0);
           float3 pullDirection = (pullLocation - pos.xyz);
           float d = distance(0, pullDirection);
+#else
+          float2 pullLocation = float2(0, 0);
+          float2 pullDirection = (pullLocation - pos.xy);
+          float d = distance(0, pullDirection);
+#endif
 
           //Apply gravity
           //velocity.xy -= _DeltaTime * _GravityScale * float2(_GravityDirection.x, _GravityDirection.y);
@@ -72,8 +80,12 @@
           //Gravity towards center screen
           float d2 = 1 + pow(d, 2.0f);
           float gravity_force = 6.67f * pow(10, -2) * _CenterGravityForce / d2;
+             
+#if defined(THREE_D_MODE_ON)
           velocity.xyz += gravity_force * pullDirection * _DeltaTime;
-
+#else
+          velocity.xy += gravity_force * pullDirection * _DeltaTime;
+#endif
           //Pull towards mouse if button is down
           if (_MouseForce != 0)
           {
@@ -86,11 +98,12 @@
           //Limit maximum speed
           velocity.x = clamp(velocity.x, -10.0f, 10.0f);
           velocity.y = clamp(velocity.y, -10.0f, 10.0f);
-          //velocity.z = clamp(velocity.z, -10.0f, 10.0f);
-
+#if defined(THREE_D_MODE_ON) 
+          velocity.z = clamp(velocity.z, -10.0f, 10.0f);
+#endif
+             
           return velocity;
          }
-
          ENDCG
        }
     }

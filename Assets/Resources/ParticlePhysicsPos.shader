@@ -20,6 +20,7 @@
             #pragma vertex vert
             #pragma fragment frag
             #pragma target 3.0
+            #pragma shader_feature THREE_D_MODE_ON
 
             #include "UnityCG.cginc"
 
@@ -56,8 +57,12 @@
                 float4 velocity = tex2D(_VelTex, i.uv);
 
                 //Simply add velocity to position of each particle
-                pos.xyz += velocity.xyz * _DeltaTime/* * 2.0f*/;
-
+#if defined(THREE_D_MODE_ON)
+                pos.xyz += velocity.xyz * _DeltaTime;
+#else
+                pos.xy += velocity.xy * _DeltaTime;
+#endif
+                
                 //Set position z-axis to 0.0f to simulate particles on a 2d plane.
                 //pos.z *= _ThreeDFactor;
 

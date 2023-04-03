@@ -52,38 +52,44 @@ public class InputHelper : MonoBehaviour
 
     if (Input.GetKeyDown(KeyCode.Alpha1))
     {
-      ParticleCount = 1000000;
-      ResetCallback?.Invoke(true);
+      ParticleCount = 128*128;
+      ResetCallback?.Invoke(false);
     }
-
+    
     if (Input.GetKeyDown(KeyCode.Alpha2))
     {
-      ParticleCount = 2000000;
-      ResetCallback?.Invoke(true);
+      ParticleCount = 256*256;
+      ResetCallback?.Invoke(false);
     }
 
     if (Input.GetKeyDown(KeyCode.Alpha3))
     {
-      ParticleCount = 3000000;
-      ResetCallback?.Invoke(true);
+      ParticleCount = 512*512;
+      ResetCallback?.Invoke(false);
     }
 
     if (Input.GetKeyDown(KeyCode.Alpha4))
     {
-      ParticleCount = 10000000;
-      ResetCallback?.Invoke(true);
+      ParticleCount = 1024*1024;
+      ResetCallback?.Invoke(false);
     }
 
     if (Input.GetKeyDown(KeyCode.Alpha5))
     {
-      ParticleCount = 20000000;
-      ResetCallback?.Invoke(true);
+      ParticleCount = 2048*2048;
+      ResetCallback?.Invoke(false);
     }
 
     if (Input.GetKeyDown(KeyCode.Alpha6))
     {
-      ParticleCount = 30000000;
-      ResetCallback?.Invoke(true);
+      ParticleCount = 4096*4096;
+      ResetCallback?.Invoke(false);
+    }
+
+    if (Input.GetKeyDown(KeyCode.Alpha7))
+    {
+      ParticleCount = 8192*8192;
+      ResetCallback?.Invoke(false);
     }
   }
 }

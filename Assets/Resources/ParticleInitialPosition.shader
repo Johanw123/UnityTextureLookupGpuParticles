@@ -18,6 +18,7 @@
             #pragma vertex vert
             #pragma fragment frag
             #pragma target 3.0
+            #pragma shader_feature THREE_D_MODE_ON
 
             #include "UnityCG.cginc"
 
@@ -54,7 +55,17 @@
             {
                 float r = random(i.uv);
                 float d = distance(float2(0.0f, 0.0f), i.pos) * 0.001f;
-                return float4(i.uv.x, i.uv.y, 0, 0) * d * r;
+
+                float x = sin(i.uv.x * d  * 3.1415f)* 20.0f;
+                float y = cos(i.uv.y * d * 3.1415f)* 20.0f;
+                
+#if defined(THREE_D_MODE_ON)
+                float z = cos(i.uv.y * d * 3.1415f)* 20.0f;
+                return float4(x, y, z, 0);
+#else
+                return float4(x, y, 0, 0);
+#endif
+
             }
             ENDCG
         }

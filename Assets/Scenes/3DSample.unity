@@ -139,7 +139,7 @@ GameObject:
   - component: {fileID: 1075681578}
   m_Layer: 0
   m_Name: ParticlesCamera
-  m_TagString: Untagged
+  m_TagString: MainCamera
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
@@ -162,6 +162,7 @@ MonoBehaviour:
   MouseForcePull: 150
   MouseForcePush: 45
   ParticleMaterial: {fileID: 2100000, guid: 971371e1e80bcd947a538fff0892fa71, type: 2}
+  CurrentTextureFormat: 20
 --- !u!81 &1075681575
 AudioListener:
   m_ObjectHideFlags: 0
