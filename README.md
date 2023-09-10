@@ -1,7 +1,9 @@
 # UnityTextureLookupGpuParticles
 
 Unity project using texture lookup on the GPU to store particle data and move them about. 
+
 This sytem was created for and used in the game [SquareManBoy](https://store.steampowered.com/app/1639710/SquareManBoy/)
+![](https://github.com/Johanw123/UnityTextureLookupGpuParticles/blob/main/goal.gif)
 
 https://www.youtube.com/watch?v=4sfZzYQSD_4
 
